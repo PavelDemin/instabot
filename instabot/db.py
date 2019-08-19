@@ -39,6 +39,13 @@ def get_accounts():
         print(e)
 
 
+def del_account(account):
+    try:
+        r = accounts.delete_one({'account' : account})
+        return r.deleted_count
+    except Exception as e:
+        print(e)
+
 def get_media():
     try:
         media = insta.find({})

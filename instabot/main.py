@@ -1,15 +1,20 @@
 import asyncio
 import logging
 import aiohttp
-#import urllib.request
 import requests
 import os
-#from bs4 import BeautifulSoup
-#import datetime
 from instagram import Account, Media, WebAgent
 import db
 
-from aiogram import Bot, Dispatcher, executor, types
+import time
+#from time import time
+
+#https://surik00.gitbooks.io/aiogram-lessons/content/chapter5.html
+from aiogram import Bot, types
+from aiogram.utils import executor
+from aiogram.utils.markdown import text
+from aiogram.dispatcher import Dispatcher
+from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 PROXY_URL = 'http://181.177.86.88:9556'
 PROXY_AUTH = aiohttp.BasicAuth(login='9tFhcM', password='w91adS')
@@ -25,27 +30,15 @@ API_TOKEN = '913359177:AAHUTfYP1bwiDkrcMagJAAS6UWi0HY3EFJE'
 logging.basicConfig(level=logging.INFO)
 
 # Initialize bot and dispatcher
-loop = asyncio.get_event_loop()
-bot = Bot(token=API_TOKEN, loop=loop, proxy=PROXY_URL, proxy_auth=PROXY_AUTH)
+#loop = asyncio.get_event_loop()
+#bot = Bot(token=API_TOKEN, loop=loop, proxy=PROXY_URL, proxy_auth=PROXY_AUTH)
+bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 #import pdb; pdb.set_trace()
 agent = WebAgent()
 
-#folder = 'media'
 insta_url = "https://www.instagram.com/"
 
-# https://github.com/Sunil02324/Instagram-Image-Downloader
-#def DownloadSingleFile(fileURL):
-#    print ('Downloading image...')
-#    f = urllib.request.urlopen(fileURL)
-#    htmlSource = f.read()
-#    soup = BeautifulSoup(htmlSource,'html.parser')
-#    metaTag = soup.find_all('meta', {'property':'og:image'})
-#    imgURL = metaTag[0]['content']
-#    file_name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + '.jpg'
-#    urllib.request.urlretrieve(imgURL, os.path.join(folder, file_name))
-#    print ('Done. Image saved to disk as ' + file_name)
-#    return file_name
 
 def load_media():
     count = 0
@@ -64,11 +57,30 @@ def load_media():
             continue
     return count
 
+#def dell(account):
+#    db.del_account(account)
+#    print('Del '+ account)
+
+#for account in db.get_accounts():
+#    dell(account)
+
+
+async def printer():
+    num = 1
+    while True:
+        print(num)
+        num += 1
+        await asyncio.sleep(1)
 
 def check_account(account):
     r = requests.get(insta_url + account)
     return r.status_code
 
+
+@dp.callback_query_handler(lambda c: c.data == 'button1')
+async def process_callback_button1(callback_query: types.CallbackQuery):
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(callback_query.from_user.id, 'Нажата первая кнопка!')
 
 @dp.message_handler(commands=['start'])
 async def welcome(message: types.Message):
@@ -76,7 +88,7 @@ async def welcome(message: types.Message):
     # Configure ReplyKeyboardMarkup
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
     markup.add('Обновить', "Настройки")
-    markup.add(u'\U0001F464 Аккаунты')
+    markup.add('Обновить', u'\U0001F464 Аккаунты')
     await bot.send_message(message.chat.id, "Выбирете пункт меню:", reply_markup=markup)
 
 
@@ -90,22 +102,40 @@ async def update(message: types.Message):
     else:
         await bot.send_message(message.chat.id, 'Новых публикаций нет!')
 
+
 @dp.message_handler(lambda message: message.text and u'\U0001F464 аккаунты' in message.text.lower())
-async def update(message: types.Message):
+async def list_accounts(message: types.Message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
     markup.add(u'\U00002795 Добавить', u'\U00002796 Удалить')
-    markup.add(u'\U0001F464 Аккаунты')
+    markup.add('Обновить', u'\U0001F464 Аккаунты')
     await bot.send_message(message.chat.id, 'Список аккаунтов:\n' + '\n'.join(db.get_accounts()), reply_markup=markup)
 
 
 @dp.message_handler(lambda message: message.text and u'\U00002795 добавить' in message.text.lower())
-async def update(message: types.Message):
+async def add_account_to_list(message: types.Message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
     markup.add('Обновить', u'\U0001F464 Аккаунты')
     await bot.send_message(message.chat.id, 'Введите новый аккаунт:', reply_markup=markup)
 
+
+@dp.message_handler(lambda message: message.text and u'\U00002796 удалить' in message.text.lower())
+async def process_command_1(message: types.Message):
+    await message.reply("Первая инлайн кнопка", reply_markup=inline_kb1)
+
+
+@dp.message_handler(commands=['1'])
+async def process_command_1(message: types.Message):
+    
+    for  acc in db.get_accounts():
+        print(acc)
+        btn = (InlineKeyboardButton(str(acc), callback_data='button1'))
+        print(btn)
+    inline_kb1 = InlineKeyboardMarkup().add(btn)
+    await message.reply("Первая инлайн кнопка", reply_markup=inline_kb1)
+
+
 @dp.message_handler(regexp='^[A-Za-z0-9_.]{1,30}$')
-async def msg_handler(message: types.Message):
+async def get_account_name(message: types.Message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
     markup.add('Обновить', u'\U0001F464 Аккаунты')
     if check_account(message.text) == 200:
@@ -116,4 +146,9 @@ async def msg_handler(message: types.Message):
 
 
 if __name__ == '__main__':
-    executor.start_polling(dp, loop=loop, skip_updates=True)
+    loop = asyncio.get_event_loop()
+
+    tasks = [
+        loop.create_task(printer()),
+        executor.start_polling(dp)
+    ]
