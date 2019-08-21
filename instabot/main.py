@@ -5,6 +5,7 @@ import requests
 import os
 from instagram import Account, Media, WebAgent
 import db
+import config as cfg
 
 import time
 #from time import time
@@ -16,23 +17,13 @@ from aiogram.utils.markdown import text
 from aiogram.dispatcher import Dispatcher
 from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
-PROXY_URL = 'http://181.177.86.88:9556'
-PROXY_AUTH = aiohttp.BasicAuth(login='9tFhcM', password='w91adS')
-# If authentication is required in your proxy then uncomment next line and change login/password for it
-# PROXY_AUTH = aiohttp.BasicAuth(login='login', password='password')
-# And add `proxy_auth=PROXY_AUTH` argument in line 25, like this:
-# >>> bot = Bot(token=API_TOKEN, loop=loop, proxy=PROXY_URL, proxy_auth=PROXY_AUTH)
-# Also you can use Socks5 proxy but you need manually install aiohttp_socks package.
-
-API_TOKEN = '913359177:AAHUTfYP1bwiDkrcMagJAAS6UWi0HY3EFJE'
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
 # Initialize bot and dispatcher
 #loop = asyncio.get_event_loop()
-#bot = Bot(token=API_TOKEN, loop=loop, proxy=PROXY_URL, proxy_auth=PROXY_AUTH)
-bot = Bot(token=API_TOKEN)
+bot = Bot(token=cfg.API_TOKEN, proxy=cfg.PROXY_URL, proxy_auth=cfg.PROXY_AUTH)
+#bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 #import pdb; pdb.set_trace()
 agent = WebAgent()
@@ -70,29 +61,41 @@ async def printer():
     while True:
         print(num)
         num += 1
-        await asyncio.sleep(1)
+        await asyncio.sleep(10)
 
 def check_account(account):
     r = requests.get(insta_url + account)
     return r.status_code
 
 
-@dp.callback_query_handler(lambda c: c.data == 'button1')
+#@dp.callback_query_handler(lambda c: c.data == 'delate')
+@dp.callback_query_handler()
 async def process_callback_button1(callback_query: types.CallbackQuery):
-    await bot.answer_callback_query(callback_query.id)
-    await bot.send_message(callback_query.from_user.id, 'Нажата первая кнопка!')
+    #print(callback_query)
+    if callback_query.data.startswith('delate'):
+        acc = callback_query.data.split('=')[-1]
+        db.del_account(acc)
+        await bot.answer_callback_query(callback_query.id, text = 'Аккаунт ' + acc + ' удален!')
+    #    await account_manager(callback_query.message)
+        inline_kb1 = InlineKeyboardMarkup(row_width=2)
+        for  acc in db.get_accounts():
+            btn1 = InlineKeyboardButton(acc, callback_data=acc)
+            btn = InlineKeyboardButton(u'\U0000274C', callback_data='delate='+acc)
+            inline_kb1.row(btn1, btn)
+        await bot.edit_message_text(text = '<b>Управление аккаунтами</b>\nДля того чтобы добавить аккаунт, напишите боту его имя.', chat_id = callback_query.message.chat.id, message_id = callback_query.message.message_id, reply_markup=inline_kb1, parse_mode='HTML')
+
 
 @dp.message_handler(commands=['start'])
 async def welcome(message: types.Message):
    # await message.text("Welcome to Instagram Media Save Bot!")
     # Configure ReplyKeyboardMarkup
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-    markup.add('Обновить', "Настройки")
-    markup.add('Обновить', u'\U0001F464 Аккаунты')
+    markup.add(u'\U0001F504 Обновить', "Настройки")
+    markup.add(u'\U0001F464 Аккаунты')
     await bot.send_message(message.chat.id, "Выбирете пункт меню:", reply_markup=markup)
 
 
-@dp.message_handler(lambda message: message.text and 'обновить' in message.text.lower())
+@dp.message_handler(lambda message: message.text and u'\U0001F504 обновить' in message.text.lower())
 async def update(message: types.Message):
     await bot.send_message(message.chat.id, 'Идет загрузка новых публикаций...')
     if(load_media()) > 0:
@@ -104,45 +107,30 @@ async def update(message: types.Message):
 
 
 @dp.message_handler(lambda message: message.text and u'\U0001F464 аккаунты' in message.text.lower())
-async def list_accounts(message: types.Message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-    markup.add(u'\U00002795 Добавить', u'\U00002796 Удалить')
-    markup.add('Обновить', u'\U0001F464 Аккаунты')
-    await bot.send_message(message.chat.id, 'Список аккаунтов:\n' + '\n'.join(db.get_accounts()), reply_markup=markup)
+async def account_manager(message: types.Message):
+    inline_kb1 = InlineKeyboardMarkup(row_width=3)
+    #inline_kb1.add(InlineKeyboardButton('Добавить аккаунт', callback_data='add'))
+    for  acc in db.get_accounts():
+        btn1 = InlineKeyboardButton(acc, callback_data=acc)
+        btn = InlineKeyboardButton(u'\U0000274C', callback_data='delate='+acc)
+        inline_kb1.row(btn1, btn)
+    await bot.send_message(message.chat.id, '<b>Управление аккаунтами</b>\nДля того чтобы добавить аккаунт, напишите боту его имя.', reply_markup=inline_kb1, parse_mode='HTML')
 
 
 @dp.message_handler(lambda message: message.text and u'\U00002795 добавить' in message.text.lower())
 async def add_account_to_list(message: types.Message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-    markup.add('Обновить', u'\U0001F464 Аккаунты')
+    markup.add(u'\U0001F504 Обновить', u'\U0001F464 Аккаунты')
     await bot.send_message(message.chat.id, 'Введите новый аккаунт:', reply_markup=markup)
-
-
-@dp.message_handler(lambda message: message.text and u'\U00002796 удалить' in message.text.lower())
-async def process_command_1(message: types.Message):
-    await message.reply("Первая инлайн кнопка", reply_markup=inline_kb1)
-
-
-@dp.message_handler(commands=['1'])
-async def process_command_1(message: types.Message):
-    
-    for  acc in db.get_accounts():
-        print(acc)
-        btn = (InlineKeyboardButton(str(acc), callback_data='button1'))
-        print(btn)
-    inline_kb1 = InlineKeyboardMarkup().add(btn)
-    await message.reply("Первая инлайн кнопка", reply_markup=inline_kb1)
 
 
 @dp.message_handler(regexp='^[A-Za-z0-9_.]{1,30}$')
 async def get_account_name(message: types.Message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-    markup.add('Обновить', u'\U0001F464 Аккаунты')
     if check_account(message.text) == 200:
         db.add_account(message.text)
-        await bot.send_message(message.chat.id, 'Аккаунт добавлен! \nВведите новый аккаунт:', reply_markup=markup)
+        await account_manager(message)
     else:
-        await bot.send_message(message.chat.id, 'Имя аккаунта не корректно \nПопробуйте еще раз:', reply_markup=markup)
+        await bot.send_message(message.chat.id, '<b>Имя аккаунта не корректно!</b> \nПопробуйте еще раз.', parse_mode='HTML')
 
 
 if __name__ == '__main__':

@@ -41,8 +41,9 @@ def get_accounts():
 
 def del_account(account):
     try:
-        r = accounts.delete_one({'account' : account})
-        return r.deleted_count
+        accounts.delete_one({'account' : account})
+        insta.delete_one({'account' : account})
+        #return r.deleted_count
     except Exception as e:
         print(e)
 
