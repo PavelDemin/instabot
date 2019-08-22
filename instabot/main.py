@@ -18,20 +18,20 @@ from aiogram.dispatcher import Dispatcher
 from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.schedulers.background import BackgroundScheduler
 
+#my_chat_id = 228534214
+
 # Configure logging
 #logging.basicConfig(filename="log.log", level=logging.WARNING)
 logging.basicConfig(level=logging.INFO)
 # Initialize bot and dispatcher
 loop = asyncio.get_event_loop()
-#bot = Bot(token=cfg.API_TOKEN, proxy=cfg.PROXY_URL, proxy_auth=cfg.PROXY_AUTH)
-bot = Bot(token=cfg.API_TOKEN)
+bot = Bot(token=cfg.API_TOKEN, proxy=cfg.PROXY_URL, proxy_auth=cfg.PROXY_AUTH)
+#bot = Bot(token=cfg.API_TOKEN)
 dp = Dispatcher(bot)
 #import pdb; pdb.set_trace()
 agent = WebAgent()
 
 insta_url = "https://www.instagram.com/"
-
-
 
 def load_media():
     count = 0
@@ -57,14 +57,11 @@ def load_media():
 #for account in db.get_accounts():
 #    dell(account)
 
-
-def printer():
+async def update_media(my_chat_id):
     if load_media() > 0:
-        print('lolol')
-        #   media = db.get_media()
-        #   for m in media:
-        #      await bot.send_message(my_chat_id, 'Публикация от ' + m['account'] + '\n' + insta_url + 'p/' + m['mediaId'])
-
+        media = db.get_media()
+        for m in media:
+            await bot.send_message(my_chat_id, 'Публикация от ' + m['account'] + '\n' + insta_url + 'p/' + m['mediaId'])
 
 
 def check_account(account):
@@ -95,8 +92,9 @@ async def welcome(message: types.Message):
     # Configure ReplyKeyboardMarkup
     
     my_chat_id = message.chat.id
+   # print(my_chat_id)
     scheduler = BackgroundScheduler()
-    scheduler.add_job(printer, "interval", seconds=20)
+    scheduler.add_job(lambda: loop.create_task(update_media(my_chat_id)), "interval", seconds=20)
     scheduler.start()
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
     markup.add(u'\U0001F504 Обновить', "Настройки")
