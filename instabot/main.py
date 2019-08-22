@@ -16,19 +16,21 @@ from aiogram.utils import executor
 from aiogram.utils.markdown import text
 from aiogram.dispatcher import Dispatcher
 from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # Configure logging
+#logging.basicConfig(filename="log.log", level=logging.WARNING)
 logging.basicConfig(level=logging.INFO)
-
 # Initialize bot and dispatcher
-#loop = asyncio.get_event_loop()
-bot = Bot(token=cfg.API_TOKEN, proxy=cfg.PROXY_URL, proxy_auth=cfg.PROXY_AUTH)
-#bot = Bot(token=API_TOKEN)
+loop = asyncio.get_event_loop()
+#bot = Bot(token=cfg.API_TOKEN, proxy=cfg.PROXY_URL, proxy_auth=cfg.PROXY_AUTH)
+bot = Bot(token=cfg.API_TOKEN)
 dp = Dispatcher(bot)
 #import pdb; pdb.set_trace()
 agent = WebAgent()
 
 insta_url = "https://www.instagram.com/"
+
 
 
 def load_media():
@@ -56,12 +58,14 @@ def load_media():
 #    dell(account)
 
 
-async def printer():
-    num = 1
-    while True:
-        print(num)
-        num += 1
-        await asyncio.sleep(10)
+def printer():
+    if load_media() > 0:
+        print('lolol')
+        #   media = db.get_media()
+        #   for m in media:
+        #      await bot.send_message(my_chat_id, 'Публикация от ' + m['account'] + '\n' + insta_url + 'p/' + m['mediaId'])
+
+
 
 def check_account(account):
     r = requests.get(insta_url + account)
@@ -89,6 +93,11 @@ async def process_callback_button1(callback_query: types.CallbackQuery):
 async def welcome(message: types.Message):
    # await message.text("Welcome to Instagram Media Save Bot!")
     # Configure ReplyKeyboardMarkup
+    
+    my_chat_id = message.chat.id
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(printer, "interval", seconds=20)
+    scheduler.start()
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
     markup.add(u'\U0001F504 Обновить', "Настройки")
     markup.add(u'\U0001F464 Аккаунты')
@@ -98,7 +107,7 @@ async def welcome(message: types.Message):
 @dp.message_handler(lambda message: message.text and u'\U0001F504 обновить' in message.text.lower())
 async def update(message: types.Message):
     await bot.send_message(message.chat.id, 'Идет загрузка новых публикаций...')
-    if(load_media()) > 0:
+    if load_media() > 0:
         media = db.get_media()
         for m in media:
             await bot.send_message(message.chat.id, 'Публикация от ' + m['account'] + '\n' + insta_url + 'p/' + m['mediaId'])
@@ -116,7 +125,6 @@ async def account_manager(message: types.Message):
         inline_kb1.row(btn1, btn)
     await bot.send_message(message.chat.id, '<b>Управление аккаунтами</b>\nДля того чтобы добавить аккаунт, напишите боту его имя.', reply_markup=inline_kb1, parse_mode='HTML')
 
-
 @dp.message_handler(lambda message: message.text and u'\U00002795 добавить' in message.text.lower())
 async def add_account_to_list(message: types.Message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
@@ -132,11 +140,8 @@ async def get_account_name(message: types.Message):
     else:
         await bot.send_message(message.chat.id, '<b>Имя аккаунта не корректно!</b> \nПопробуйте еще раз.', parse_mode='HTML')
 
-
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
+    #loop = asyncio.get_event_loop()
+    
+    executor.start_polling(dp)
 
-    tasks = [
-        loop.create_task(printer()),
-        executor.start_polling(dp)
-    ]
