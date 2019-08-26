@@ -2,7 +2,7 @@ import asyncio
 import logging
 import aiohttp
 import requests
-import os
+from os import _exit
 from instagram import Account, Media, WebAgent
 import db
 import config as cfg
@@ -16,7 +16,7 @@ from aiogram.utils import executor
 from aiogram.utils.markdown import text
 from aiogram.dispatcher import Dispatcher
 from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 #my_chat_id = 228534214
 
@@ -25,8 +25,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 logging.basicConfig(level=logging.INFO)
 # Initialize bot and dispatcher
 loop = asyncio.get_event_loop()
-bot = Bot(token=cfg.API_TOKEN, proxy=cfg.PROXY_URL, proxy_auth=cfg.PROXY_AUTH)
-#bot = Bot(token=cfg.API_TOKEN)
+#bot = Bot(token=cfg.API_TOKEN, proxy=cfg.PROXY_URL, proxy_auth=cfg.PROXY_AUTH)
+bot = Bot(token=cfg.API_TOKEN)
 dp = Dispatcher(bot)
 #import pdb; pdb.set_trace()
 agent = WebAgent()
@@ -91,15 +91,23 @@ async def welcome(message: types.Message):
    # await message.text("Welcome to Instagram Media Save Bot!")
     # Configure ReplyKeyboardMarkup
     
-    my_chat_id = message.chat.id
+    #print(message)
+    if db.check_user(message.chat.id) == 0:
+        db.add_user(message.chat.id)
+    #print(db.get_user(message.chat.id))
    # print(my_chat_id)
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(lambda: loop.create_task(update_media(my_chat_id)), "interval", seconds=20)
+    scheduler.add_job(lambda: loop.create_task(update_media(message.chat.id)), "interval", minutes=db.get_user(message.chat.id)["delay"], id=str(message.chat.id))
     scheduler.start()
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
     markup.add(u'\U0001F504 Обновить', "Настройки")
     markup.add(u'\U0001F464 Аккаунты')
     await bot.send_message(message.chat.id, "Выбирете пункт меню:", reply_markup=markup)
+
+
+@dp.message_handler(commands=['exit'])
+async def exit(message: types.Message):
+    await message.reply("Выключаюсь")
+    _exit(2)
 
 
 @dp.message_handler(lambda message: message.text and u'\U0001F504 обновить' in message.text.lower())
@@ -111,6 +119,29 @@ async def update(message: types.Message):
             await bot.send_message(message.chat.id, 'Публикация от ' + m['account'] + '\n' + insta_url + 'p/' + m['mediaId'])
     else:
         await bot.send_message(message.chat.id, 'Новых публикаций нет!')
+
+
+@dp.message_handler(lambda message: message.text and 'настройки' in message.text.lower())
+async def settings(message: types.Message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
+    markup.add('Изменить задержку', "Настройки")
+    await bot.send_message(message.chat.id, 'Задержка обновлений, мин: <b>' + str(db.get_user(message.chat.id)["delay"])+'</b>\n', reply_markup=markup, parse_mode='HTML')
+
+
+@dp.message_handler(lambda message: message.text and 'изменить задержку' in message.text.lower())
+async def settings(message: types.Message):
+    await bot.send_message(message.chat.id, 'Введите время задержки обновления:')
+    
+
+@dp.message_handler(regexp='^[0-9]{1,4}$')
+async def change_delay(message: types.Message):
+    db.update_settings(message.chat.id, 'delay', int(message.text))
+    #scheduler.modify_job(str(message.chat.id), minute=str(db.get_user(message.chat.id)["delay"]))
+    scheduler.reschedule_job(str(message.chat.id), trigger='interval', minutes=db.get_user(message.chat.id)["delay"])
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
+    markup.add(u'\U0001F504 Обновить', "Настройки")
+    markup.add(u'\U0001F464 Аккаунты')
+    await bot.send_message(message.chat.id, '<b>Настройки обновлены!</b>', reply_markup=markup, parse_mode='HTML')
 
 
 @dp.message_handler(lambda message: message.text and u'\U0001F464 аккаунты' in message.text.lower())
@@ -140,6 +171,6 @@ async def get_account_name(message: types.Message):
 
 if __name__ == '__main__':
     #loop = asyncio.get_event_loop()
-    
+    scheduler = AsyncIOScheduler()
     executor.start_polling(dp)
 
